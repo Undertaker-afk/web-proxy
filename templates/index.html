@@ -8,6 +8,7 @@
             max-width: 1200px;
             margin: 0 auto;
             padding: 20px;
+            background-color: #f5f5f5;
         }
         .container {
             display: flex;
@@ -131,6 +132,11 @@
     <h1>Web Proxy</h1>
     <div class="container">
         <div class="main-content">
+            <div class="connection-status">
+                <span class="status-indicator" id="connectionStatus"></span>
+                <span id="statusText">Nicht verbunden</span>
+            </div>
+
             <div class="info">
         Geben Sie die Proxy-Server-Details und die gewünschte URL ein, um eine Webseite über den Proxy aufzurufen.
     </div>
@@ -214,13 +220,27 @@
 
     <script>
         const logConsole = document.getElementById('logConsole');
+        const connectionStatus = document.getElementById('connectionStatus');
+        const statusText = document.getElementById('statusText');
+        const testButton = document.getElementById('testButton');
+        
+        function updateConnectionStatus(connected, message = '') {
+            connectionStatus.className = 'status-indicator ' + 
+                (connected ? 'status-connected' : 'status-disconnected');
+            statusText.textContent = message || (connected ? 'Verbunden' : 'Nicht verbunden');
+        }
+        
+        function formatErrorMessage(message) {
+            // Ersetze \n mit HTML-Zeilenumbrüchen
+            return message.replace(/\n/g, '<br>');
+        }
         
         function addLog(message, type = 'info') {
             const now = new Date();
             const time = now.toLocaleTimeString();
             const logEntry = document.createElement('div');
             logEntry.className = `log-entry log-${type}`;
-            logEntry.innerHTML = `<span class="log-time">[${time}]</span> ${message}`;
+            logEntry.innerHTML = `<span class="log-time">[${time}]</span> ${formatErrorMessage(message)}`;
             logConsole.appendChild(logEntry);
             logConsole.scrollTop = logConsole.scrollHeight;
         }
@@ -238,7 +258,15 @@
         }
 
         function testConnection() {
-            addLog('Teste Proxy-Verbindung...', 'info');
+            const protocol = document.getElementById('protocol').value;
+            const host = document.getElementById('proxy_host').value;
+            const port = document.getElementById('proxy_port').value;
+            
+            updateConnectionStatus(false, 'Teste Verbindung...');
+            testButton.classList.add('testing');
+            
+            addLog(`Teste Proxy-Verbindung zu ${protocol}://${host}:${port}...`, 'info');
+            
             const formData = new FormData(document.getElementById('proxyForm'));
             fetch('/test_connection', {
                 method: 'POST',
@@ -247,13 +275,21 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    addLog(`Verbindung erfolgreich! Latenz: ${data.latency}ms`, 'success');
+                    const details = data.details;
+                    addLog(`Verbindung erfolgreich!`, 'success');
+                    addLog(`Latenz: ${data.latency}ms`, 'info');
+                    addLog(`Externe IP: ${details.external_ip}`, 'info');
+                    addLog(`Server: ${details.server}`, 'info');
+                    addLog(`Protokoll: ${details.protocol_used}`, 'info');
+                    addLog(`Antwortgröße: ${Math.round(details.response_size/1024)}KB`, 'info');
                 } else {
-                    addLog(`Verbindungsfehler: ${data.error}`, 'error');
+                    addLog(`Verbindungsfehler:`, 'error');
+                    addLog(data.error, 'error');
                 }
             })
             .catch(error => {
-                addLog(`Fehler beim Testen der Verbindung: ${error}`, 'error');
+                addLog(`Fehler beim Testen der Verbindung:`, 'error');
+                addLog(error.toString(), 'error');
             });
         }
 
@@ -263,11 +299,20 @@
             const protocol = document.getElementById('protocol').value;
             const host = document.getElementById('proxy_host').value;
             const port = document.getElementById('proxy_port').value;
-            addLog(`Sende Anfrage an ${url} über ${protocol}://${host}:${port}`, 'info');
+            
+            addLog(`Sende Anfrage an ${url}`, 'info');
+            addLog(`Verwende Proxy: ${protocol}://${host}:${port}`, 'info');
+            
+            // Wenn Authentifizierung aktiviert ist
+            if (document.getElementById('use_auth').checked) {
+                const username = document.getElementById('proxy_username').value;
+                addLog(`Authentifizierung aktiviert für Benutzer: ${username}`, 'info');
+            }
         });
 
         // Initial Log
         addLog('Web Proxy bereit', 'info');
+        addLog('Bitte geben Sie die Proxy-Details ein und testen Sie die Verbindung', 'info');
     </script>
 </body>
 </html>
