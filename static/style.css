@@ -1,0 +1,143 @@
+body {
+    margin: 0;
+    padding: 20px;
+    font-family: Arial, sans-serif;
+    background-color: #f0f2f5;
+}
+
+.container {
+    display: grid;
+    grid-template-columns: 300px 1fr 300px;
+    gap: 20px;
+    max-width: 1800px;
+    margin: 0 auto;
+    height: calc(100vh - 40px);
+}
+
+.proxy-settings {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.content-area {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    display: flex;
+    flex-direction: column;
+}
+
+.navigation-bar {
+    padding: 10px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.console-panel {
+    background: #1e1e1e;
+    color: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+#console {
+    height: calc(100% - 40px);
+    overflow-y: auto;
+    font-family: monospace;
+    font-size: 14px;
+    white-space: pre-wrap;
+    padding: 10px;
+    background: #000;
+    border-radius: 4px;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+input[type="text"],
+input[type="number"],
+input[type="url"],
+input[type="password"],
+select {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+
+button {
+    background-color: #0066cc;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+button:hover {
+    background-color: #0052a3;
+}
+
+#testConnection {
+    background-color: #28a745;
+    width: 100%;
+    margin-top: 10px;
+}
+
+#testConnection:hover {
+    background-color: #218838;
+}
+
+#disconnectButton {
+    background-color: #dc3545;
+}
+
+#disconnectButton:hover {
+    background-color: #c82333;
+}
+
+.url-section {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid #dee2e6;
+}
+
+#webContent {
+    flex: 1;
+    border: none;
+    width: 100%;
+    height: 100%;
+}
+
+.log-entry {
+    margin: 5px 0;
+    padding: 5px;
+    border-radius: 3px;
+}
+
+.log-success { color: #28a745; }
+.log-error { color: #dc3545; }
+.log-info { color: #17a2b8; }
+
+#currentUrl {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #666;
+}
