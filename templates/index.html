@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Web Proxy</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            display: flex;
+            gap: 20px;
+        }
+        .main-content {
+            flex: 2;
+        }
+        .log-console {
+            flex: 1;
+            min-width: 300px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"], input[type="number"], input[type="password"], select {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button.test {
+            background-color: #2196F3;
+        }
+        button:hover {
+            opacity: 0.9;
+        }
+        .error {
+            color: #ff0000;
+            background-color: #ffe6e6;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+        .success {
+            color: #4CAF50;
+            background-color: #e8f5e9;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .info {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+        .auth-section {
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+        .checkbox-group {
+            margin-bottom: 10px;
+        }
+        .checkbox-group label {
+            display: inline;
+            margin-left: 5px;
+        }
+        #logConsole {
+            background-color: #1e1e1e;
+            color: #00ff00;
+            font-family: monospace;
+            padding: 15px;
+            border-radius: 4px;
+            height: 400px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+        .log-entry {
+            margin-bottom: 5px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 5px;
+        }
+        .log-time {
+            color: #888;
+        }
+        .log-error {
+            color: #ff4444;
+        }
+        .log-success {
+            color: #00ff00;
+        }
+        .log-info {
+            color: #2196F3;
+        }
+        .clear-log {
+            background-color: #ff4444;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Web Proxy</h1>
+    <div class="container">
+        <div class="main-content">
+            <div class="info">
+        Geben Sie die Proxy-Server-Details und die gewünschte URL ein, um eine Webseite über den Proxy aufzurufen.
+    </div>
+    
+    {% if error %}
+    <div class="error">
+        {{ error }}
+    </div>
+    {% endif %}
+
+    {% if success %}
+    <div class="success">
+        {{ success }}
+    </div>
+    {% endif %}
+
+    <form id="proxyForm" action="/browse" method="POST">
+        <div class="form-group">
+            <label for="protocol">Protokoll:</label>
+            <select id="protocol" name="protocol" required>
+                <option value="http">HTTP</option>
+                <option value="https">HTTPS</option>
+                <option value="socks4">SOCKS4</option>
+                <option value="socks5">SOCKS5</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label for="proxy_host">Proxy Server:</label>
+            <input type="text" id="proxy_host" name="proxy_host" placeholder="proxy.example.com" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="proxy_port">Port:</label>
+            <input type="number" id="proxy_port" name="proxy_port" placeholder="8080" required>
+        </div>
+
+        <div class="auth-section">
+            <div class="checkbox-group">
+                <input type="checkbox" id="use_auth" name="use_auth" onchange="toggleAuthFields()">
+                <label for="use_auth">Proxy erfordert Authentifizierung</label>
+            </div>
+            
+            <div id="auth_fields" style="display: none;">
+                <div class="form-group">
+                    <label for="proxy_username">Benutzername:</label>
+                    <input type="text" id="proxy_username" name="proxy_username" placeholder="Benutzername">
+                </div>
+                
+                <div class="form-group">
+                    <label for="proxy_password">Passwort:</label>
+                    <input type="password" id="proxy_password" name="proxy_password" placeholder="Passwort">
+                </div>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="url">Ziel-URL:</label>
+            <input type="text" id="url" name="url" placeholder="https://www.example.com" required>
+        </div>
+
+        <div class="button-group">
+            <button type="button" onclick="testConnection()" class="test">Verbindung testen</button>
+            <button type="submit">Über Proxy aufrufen</button>
+        </div>
+    </form>
+
+    {% if content %}
+    <div id="result">
+        {{ content|safe }}
+    </div>
+    {% endif %}
+        </div>
+
+        <div class="log-console">
+            <h3>Log Konsole</h3>
+            <div id="logConsole"></div>
+            <button onclick="clearLog()" class="clear-log">Log löschen</button>
+        </div>
+    </div>
+
+    <script>
+        const logConsole = document.getElementById('logConsole');
+        
+        function addLog(message, type = 'info') {
+            const now = new Date();
+            const time = now.toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry log-${type}`;
+            logEntry.innerHTML = `<span class="log-time">[${time}]</span> ${message}`;
+            logConsole.appendChild(logEntry);
+            logConsole.scrollTop = logConsole.scrollHeight;
+        }
+
+        function clearLog() {
+            logConsole.innerHTML = '';
+            addLog('Log wurde gelöscht', 'info');
+        }
+
+        function toggleAuthFields() {
+            const authFields = document.getElementById('auth_fields');
+            const useAuth = document.getElementById('use_auth');
+            authFields.style.display = useAuth.checked ? 'block' : 'none';
+            addLog(`Authentifizierung ${useAuth.checked ? 'aktiviert' : 'deaktiviert'}`, 'info');
+        }
+
+        function testConnection() {
+            addLog('Teste Proxy-Verbindung...', 'info');
+            const formData = new FormData(document.getElementById('proxyForm'));
+            fetch('/test_connection', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    addLog(`Verbindung erfolgreich! Latenz: ${data.latency}ms`, 'success');
+                } else {
+                    addLog(`Verbindungsfehler: ${data.error}`, 'error');
+                }
+            })
+            .catch(error => {
+                addLog(`Fehler beim Testen der Verbindung: ${error}`, 'error');
+            });
+        }
+
+        // Event-Listener für das Formular
+        document.getElementById('proxyForm').addEventListener('submit', function(e) {
+            const url = document.getElementById('url').value;
+            const protocol = document.getElementById('protocol').value;
+            const host = document.getElementById('proxy_host').value;
+            const port = document.getElementById('proxy_port').value;
+            addLog(`Sende Anfrage an ${url} über ${protocol}://${host}:${port}`, 'info');
+        });
+
+        // Initial Log
+        addLog('Web Proxy bereit', 'info');
+    </script>
+</body>
+</html>
