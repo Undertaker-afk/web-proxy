@@ -2,8 +2,38 @@ from flask import Flask, render_template, request, Response
 import requests
 from urllib.parse import urljoin
 import os
+import socks
+import socket
+from requests.auth import HTTPProxyAuth
 
 app = Flask(__name__)
+
+def create_proxy_session(proxy_type, host, port, username=None, password=None):
+    session = requests.Session()
+    
+    if proxy_type in ['http', 'https']:
+        proxies = {
+            'http': f'{proxy_type}://{host}:{port}',
+            'https': f'{proxy_type}://{host}:{port}'
+        }
+        
+        if username and password:
+            auth = HTTPProxyAuth(username, password)
+            session.auth = auth
+            
+        session.proxies = proxies
+        
+    elif proxy_type in ['socks4', 'socks5']:
+        socks_type = socks.SOCKS5 if proxy_type == 'socks5' else socks.SOCKS4
+        
+        if username and password and proxy_type == 'socks5':
+            socks.set_default_proxy(socks_type, host, int(port), username=username, password=password)
+        else:
+            socks.set_default_proxy(socks_type, host, int(port))
+            
+        socket.socket = socks.socksocket
+        
+    return session
 
 @app.route('/')
 def index():
@@ -11,21 +41,26 @@ def index():
 
 @app.route('/browse', methods=['POST'])
 def browse():
+    proxy_type = request.form['proxy_type']
     proxy_host = request.form['proxy_host']
     proxy_port = request.form['proxy_port']
+    proxy_username = request.form.get('proxy_username')
+    proxy_password = request.form.get('proxy_password')
     url = request.form['url']
 
-    # Proxy-Konfiguration
-    proxies = {
-        'http': f'http://{proxy_host}:{proxy_port}',
-        'https': f'http://{proxy_host}:{proxy_port}'
-    }
-
     try:
+        # Erstelle eine neue Session mit den Proxy-Einstellungen
+        session = create_proxy_session(
+            proxy_type,
+            proxy_host,
+            proxy_port,
+            proxy_username,
+            proxy_password
+        )
+
         # Request über den Proxy ausführen
-        response = requests.get(
+        response = session.get(
             url,
-            proxies=proxies,
             verify=False  # SSL-Verifizierung deaktivieren (nur für Testzwecke)
         )
 
@@ -43,8 +78,14 @@ def browse():
             content_type=response.headers.get('Content-Type')
         )
 
-    except requests.RequestException as e:
-        return f'Fehler beim Verbinden: {str(e)}', 500
+    except Exception as e:
+        error_message = f'Fehler beim Verbinden: {str(e)}'
+        return error_message, 500
+
+    finally:
+        # Wenn SOCKS verwendet wurde, setzen wir den Socket zurück
+        if proxy_type in ['socks4', 'socks5']:
+            socket.socket = socket._real_socket
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

@@ -21,6 +21,11 @@
             padding: 8px;
             margin-bottom: 10px;
         }
+        select {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+        }
         button {
             background-color: #4CAF50;
             color: white;
@@ -32,11 +37,23 @@
         button:hover {
             background-color: #45a049;
         }
+        .optional {
+            display: none;
+        }
     </style>
 </head>
 <body>
     <h1>Web Proxy</h1>
     <form action="/browse" method="POST">
+        <div class="form-group">
+            <label for="proxy_type">Proxy Protokoll:</label>
+            <select id="proxy_type" name="proxy_type" required>
+                <option value="http">HTTP</option>
+                <option value="https">HTTPS</option>
+                <option value="socks4">SOCKS4</option>
+                <option value="socks5">SOCKS5</option>
+            </select>
+        </div>
         <div class="form-group">
             <label for="proxy_host">Proxy Server:</label>
             <input type="text" id="proxy_host" name="proxy_host" placeholder="proxy.example.com" required>
@@ -45,11 +62,30 @@
             <label for="proxy_port">Port:</label>
             <input type="number" id="proxy_port" name="proxy_port" placeholder="8080" required>
         </div>
+        <div class="form-group optional auth-fields">
+            <label for="proxy_username">Benutzername (optional):</label>
+            <input type="text" id="proxy_username" name="proxy_username" placeholder="Benutzername">
+        </div>
+        <div class="form-group optional auth-fields">
+            <label for="proxy_password">Passwort (optional):</label>
+            <input type="password" id="proxy_password" name="proxy_password" placeholder="Passwort">
+        </div>
         <div class="form-group">
             <label for="url">Ziel URL:</label>
             <input type="text" id="url" name="url" placeholder="https://www.example.com" required>
         </div>
         <button type="submit">Verbinden</button>
     </form>
+
+    <script>
+        document.getElementById('proxy_type').addEventListener('change', function() {
+            const authFields = document.querySelectorAll('.auth-fields');
+            if (this.value === 'socks5') {
+                authFields.forEach(field => field.style.display = 'block');
+            } else {
+                authFields.forEach(field => field.style.display = 'none');
+            }
+        });
+    </script>
 </body>
 </html>
