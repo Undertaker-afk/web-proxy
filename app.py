@@ -1,66 +1,50 @@
-from flask import Flask, request, render_template, jsonify
+from flask import Flask, render_template, request, Response
 import requests
-from urllib.parse import urlparse
-import re
+from urllib.parse import urljoin
+import os
 
 app = Flask(__name__)
-
-def is_valid_url(url):
-    try:
-        result = urlparse(url)
-        return all([result.scheme, result.netloc])
-    except:
-        return False
-
-def is_valid_proxy(proxy):
-    # Einfache Validierung für IP:Port Format
-    proxy_pattern = re.compile(r'^(\d{1,3}\.){3}\d{1,3}:\d{1,5}$')
-    return bool(proxy_pattern.match(proxy))
 
 @app.route('/')
 def index():
     return render_template('index.html')
 
-@app.route('/fetch', methods=['POST'])
-def fetch():
-    proxy = request.form.get('proxy')
-    url = request.form.get('url')
-    
-    # Validierung der Eingaben
-    if not url or not proxy:
-        return jsonify({'error': 'URL und Proxy-Adresse sind erforderlich'}), 400
-    
-    if not is_valid_url(url):
-        return jsonify({'error': 'Ungültige URL'}), 400
-    
-    if not is_valid_proxy(proxy):
-        return jsonify({'error': 'Ungültiges Proxy-Format (verwende IP:Port)'}), 400
+@app.route('/browse', methods=['POST'])
+def browse():
+    proxy_host = request.form['proxy_host']
+    proxy_port = request.form['proxy_port']
+    url = request.form['url']
+
+    # Proxy-Konfiguration
+    proxies = {
+        'http': f'http://{proxy_host}:{proxy_port}',
+        'https': f'http://{proxy_host}:{proxy_port}'
+    }
 
     try:
-        proxies = {
-            'http': f'http://{proxy}',
-            'https': f'http://{proxy}'
-        }
-        
+        # Request über den Proxy ausführen
         response = requests.get(
-            url, 
-            proxies=proxies, 
-            timeout=10,
-            verify=False  # Deaktiviert SSL-Verifizierung
+            url,
+            proxies=proxies,
+            verify=False  # SSL-Verifizierung deaktivieren (nur für Testzwecke)
         )
-        
-        return jsonify({
-            'status': response.status_code,
-            'content': response.text,
-            'headers': dict(response.headers)
-        })
-    
-    except requests.exceptions.ProxyError:
-        return jsonify({'error': 'Proxy-Verbindungsfehler'}), 500
-    except requests.exceptions.Timeout:
-        return jsonify({'error': 'Zeitüberschreitung der Anfrage'}), 500
-    except requests.exceptions.RequestException as e:
-        return jsonify({'error': f'Fehler: {str(e)}'}), 500
+
+        # Links im HTML-Content anpassen
+        content = response.text
+        if 'text/html' in response.headers.get('Content-Type', ''):
+            # Relative URLs zu absoluten URLs umwandeln
+            content = content.replace('href="/', f'href="{urljoin(url, "/")}')
+            content = content.replace('src="/', f'src="{urljoin(url, "/")}')
+
+        # Response mit Original-Headers zurückgeben
+        return Response(
+            content,
+            status=response.status_code,
+            content_type=response.headers.get('Content-Type')
+        )
+
+    except requests.RequestException as e:
+        return f'Fehler beim Verbinden: {str(e)}', 500
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, host='0.0.0.0', port=5000)
