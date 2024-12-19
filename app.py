@@ -1,47 +1,49 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
+from flask import Flask, render_template, request, jsonify
+from flask_socketio import SocketIO
 import requests
-import socks
-import socket
 import logging
 from urllib.parse import urlparse
-import base64
+import socks
+import socket
+import time
 
 app = Flask(__name__)
-CORS(app)  # Aktiviert CORS für alle Routen
+socketio = SocketIO(app)
 
 # Logging Konfiguration
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-class ProxyConnection:
+class ProxyManager:
     def __init__(self):
         self.default_socket = socket.socket
-        
-    def setup_socks_proxy(self, proxy_type, host, port, username=None, password=None):
-        """Konfiguriert SOCKS Proxy"""
-        if proxy_type.lower() == 'socks4':
-            socks_type = socks.SOCKS4
-        elif proxy_type.lower() == 'socks5':
-            socks_type = socks.SOCKS5
-        else:
-            return False
-            
-        socks.set_default_proxy(
-            socks_type,
-            host,
-            int(port),
-            username=username,
-            password=password
-        )
-        socket.socket = socks.socksocket
-        return True
-        
-    def reset_connection(self):
-        """Setzt die Socket-Verbindung zurück"""
-        socket.socket = self.default_socket
+        self.default_create_connection = socket.create_connection
 
-proxy_connection = ProxyConnection()
+    def setup_proxy(self, host, port, protocol, auth=None):
+        if protocol.lower() in ['socks4', 'socks5']:
+            socks_version = socks.SOCKS4 if protocol.lower() == 'socks4' else socks.SOCKS5
+            socks.set_default_proxy(
+                socks_version,
+                host,
+                int(port),
+                username=auth.get('username') if auth else None,
+                password=auth.get('password') if auth else None
+            )
+            socket.socket = socks.socksocket
+            socket.create_connection = socks.create_connection
+        return {
+            'http': f'{protocol}://{host}:{port}',
+            'https': f'{protocol}://{host}:{port}'
+        }
+
+    def reset_proxy(self):
+        socket.socket = self.default_socket
+        socket.create_connection = self.default_create_connection
+
+proxy_manager = ProxyManager()
+
+def emit_log(message, type='info'):
+    socketio.emit('proxyLog', {'message': message, 'type': type})
 
 def create_proxy_dict(protocol, host, port, username=None, password=None):
     """Erstellt das Proxy-Dictionary für requests"""
@@ -60,153 +62,84 @@ def validate_url(url):
     except Exception:
         return False
 
-@app.route('/api/test-connection', methods=['POST'])
-def test_connection():
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/test-proxy', methods=['POST'])
+def test_proxy():
+    data = request.json
     try:
-        data = request.json
-        protocol = data.get('protocol', '').lower()
-        host = data.get('hostname')
-        port = data.get('port')
-        username = data.get('username')
-        password = data.get('password')
-        auth_required = data.get('authRequired', False)
+        proxies = proxy_manager.setup_proxy(
+            data['host'],
+            data['port'],
+            data['protocol'],
+            data['auth']
+        )
+        
+        # Test-URL (z.B. Google)
+        test_url = 'http://www.google.com'
+        start_time = time.time()
+        
+        response = requests.get(test_url, proxies=proxies, timeout=10)
+        response_time = time.time() - start_time
+        
+        if response.status_code == 200:
+            emit_log(f'Proxy-Test erfolgreich! Antwortzeit: {response_time:.2f}s', 'success')
+            return jsonify({'success': True})
+        else:
+            emit_log(f'Proxy-Test fehlgeschlagen: Status {response.status_code}', 'error')
+            return jsonify({'success': False, 'error': f'Status {response.status_code}'})
+            
+    except Exception as e:
+        emit_log(f'Proxy-Test fehlgeschlagen: {str(e)}', 'error')
+        return jsonify({'success': False, 'error': str(e)})
+    finally:
+        proxy_manager.reset_proxy()
 
-        if not all([protocol, host, port]):
-            return jsonify({
-                'success': False,
-                'message': 'Protokoll, Host und Port sind erforderlich'
-            }), 400
-
-        # Test URL für die Verbindungsprüfung
-        test_url = 'http://example.com'
-
-        try:
-            if protocol in ['socks4', 'socks5']:
-                proxy_connection.setup_socks_proxy(
-                    protocol,
-                    host,
-                    port,
-                    username if auth_required else None,
-                    password if auth_required else None
-                )
-                response = requests.get(test_url, timeout=10)
-            else:
-                proxies = create_proxy_dict(
-                    protocol,
-                    host,
-                    port,
-                    username if auth_required else None,
-                    password if auth_required else None
-                )
-                response = requests.get(test_url, proxies=proxies, timeout=10)
-
+@app.route('/connect', methods=['POST'])
+def connect():
+    data = request.json
+    try:
+        proxies = proxy_manager.setup_proxy(
+            data['host'],
+            data['port'],
+            data['protocol'],
+            data['auth']
+        )
+        
+        target_url = data['targetUrl']
+        emit_log(f'Verbinde mit {target_url}...', 'info')
+        
+        response = requests.get(target_url, proxies=proxies, timeout=15)
+        
+        if response.status_code == 200:
+            # Modifiziere Links im HTML-Content für relative URLs
+            content = response.text
+            base_url = urlparse(target_url)
+            content = content.replace('href="/', f'href="{base_url.scheme}://{base_url.netloc}/')
+            content = content.replace('src="/', f'src="{base_url.scheme}://{base_url.netloc}/')
+            
+            emit_log('Verbindung erfolgreich hergestellt!', 'success')
             return jsonify({
                 'success': True,
-                'message': 'Verbindungstest erfolgreich',
-                'status_code': response.status_code
+                'content': content
             })
-
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Verbindungsfehler: {str(e)}")
+        else:
+            emit_log(f'Verbindung fehlgeschlagen: Status {response.status_code}', 'error')
             return jsonify({
                 'success': False,
-                'message': f'Verbindungsfehler: {str(e)}'
-            }), 500
-
-        finally:
-            if protocol in ['socks4', 'socks5']:
-                proxy_connection.reset_connection()
-
-    except Exception as e:
-        logger.error(f"Serverfehler: {str(e)}")
-        return jsonify({
-            'success': False,
-            'message': f'Serverfehler: {str(e)}'
-        }), 500
-
-@app.route('/api/proxy', methods=['POST'])
-def proxy_request():
-    try:
-        data = request.json
-        target_url = data.get('targetUrl')
-        protocol = data.get('protocol', '').lower()
-        host = data.get('hostname')
-        port = data.get('port')
-        username = data.get('username')
-        password = data.get('password')
-        auth_required = data.get('authRequired', False)
-
-        if not all([target_url, protocol, host, port]):
-            return jsonify({
-                'success': False,
-                'message': 'Ziel-URL, Protokoll, Host und Port sind erforderlich'
-            }), 400
-
-        if not validate_url(target_url):
-            return jsonify({
-                'success': False,
-                'message': 'Ungültige Ziel-URL'
-            }), 400
-
-        try:
-            if protocol in ['socks4', 'socks5']:
-                proxy_connection.setup_socks_proxy(
-                    protocol,
-                    host,
-                    port,
-                    username if auth_required else None,
-                    password if auth_required else None
-                )
-                response = requests.get(target_url, timeout=30)
-            else:
-                proxies = create_proxy_dict(
-                    protocol,
-                    host,
-                    port,
-                    username if auth_required else None,
-                    password if auth_required else None
-                )
-                response = requests.get(target_url, proxies=proxies, timeout=30)
-
-            # Versuche den Content-Type zu bestimmen
-            content_type = response.headers.get('content-type', '')
+                'error': f'Status {response.status_code}'
+            })
             
-            # Bei Textinhalten, sende den Text zurück
-            if 'text' in content_type or 'json' in content_type:
-                return jsonify({
-                    'success': True,
-                    'content_type': content_type,
-                    'content': response.text,
-                    'status_code': response.status_code
-                })
-            # Bei Binärdaten, kodiere sie als Base64
-            else:
-                encoded_content = base64.b64encode(response.content).decode('utf-8')
-                return jsonify({
-                    'success': True,
-                    'content_type': content_type,
-                    'content': encoded_content,
-                    'is_base64': True,
-                    'status_code': response.status_code
-                })
-
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Proxy-Fehler: {str(e)}")
-            return jsonify({
-                'success': False,
-                'message': f'Proxy-Fehler: {str(e)}'
-            }), 500
-
-        finally:
-            if protocol in ['socks4', 'socks5']:
-                proxy_connection.reset_connection()
-
     except Exception as e:
-        logger.error(f"Serverfehler: {str(e)}")
+        emit_log(f'Verbindungsfehler: {str(e)}', 'error')
         return jsonify({
             'success': False,
-            'message': f'Serverfehler: {str(e)}'
-        }), 500
+            'error': str(e)
+        })
+    finally:
+        proxy_manager.reset_proxy()
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    socketio.run(app, debug=True)
