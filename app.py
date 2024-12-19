@@ -77,8 +77,8 @@ def test_proxy():
             data['auth']
         )
         
-        # Test-URL (z.B. Google)
-        test_url = 'http://www.google.com'
+        # Test-URL (Google)
+        test_url = 'https://www.google.com'
         start_time = time.time()
         
         response = requests.get(test_url, proxies=proxies, timeout=10)
