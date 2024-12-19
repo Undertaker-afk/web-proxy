@@ -8,6 +8,11 @@ const consoleOutput = document.getElementById('console');
 const navigationBar = document.querySelector('.navigation-bar');
 const webContent = document.getElementById('webContent');
 
+// Automatisches Scrollen für die Konsole
+function scrollToBottom() {
+    consoleOutput.scrollTop = consoleOutput.scrollHeight;
+}
+
 // Event Listener für Auth Checkbox
 authCheckbox.addEventListener('change', () => {
     authFields.style.display = authCheckbox.checked ? 'block' : 'none';
@@ -19,7 +24,9 @@ function addConsoleLog(message, type = 'info') {
     logEntry.className = `log-entry log-${type}`;
     logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
     consoleOutput.appendChild(logEntry);
-    consoleOutput.scrollTop = consoleOutput.scrollHeight;
+    
+    // Automatisches Scrollen nach jedem neuen Eintrag
+    requestAnimationFrame(scrollToBottom);
 }
 
 // Proxy-Verbindung testen
@@ -128,3 +135,6 @@ document.getElementById('disconnectButton').addEventListener('click', () => {
 socket.on('proxyLog', (data) => {
     addConsoleLog(data.message, data.type);
 });
+
+// Initialisiere das automatische Scrollen
+scrollToBottom();
