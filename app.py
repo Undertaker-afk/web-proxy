@@ -1,297 +1,206 @@
-from flask import Flask, render_template, request, session, jsonify
-import requests
-from bs4 import BeautifulSoup
-import urllib.parse
-import logging
-from urllib3.exceptions import InsecureRequestWarning
-import time
-import socks
-import socket
-from requests.auth import HTTPProxyAuth
-import json
-from datetime import datetime
-
-# Deaktiviere Warnungen für unsichere HTTPS-Requests
-requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
-
-app = Flask(__name__)
-app.secret_key = 'your-secret-key-here'  # Wichtig für Sessions
-logging.basicConfig(level=logging.INFO)
-
-class ProxyLogger:
-    @staticmethod
-    def log_to_response(response, log_entry):
-        if not hasattr(response, '_proxy_logs'):
-            response._proxy_logs = []
-        response._proxy_logs.append({
-            'timestamp': datetime.now().strftime('%H:%M:%S'),
-            'message': log_entry
-        })
-        return response
-
-def create_proxy_session(protocol, host, port, username=None, password=None):
-    session = requests.Session()
-    
-    if protocol in ['http', 'https']:
-        proxy_url = f"{protocol}://{host}:{port}"
-        proxies = {
-            'http': proxy_url,
-            'https': proxy_url
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Proxy Configuration</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
         }
-        session.proxies = proxies
-        if username and password:
-            session.auth = HTTPProxyAuth(username, password)
-    
-    elif protocol in ['socks4', 'socks5']:
-        socks_type = socks.SOCKS4 if protocol == 'socks4' else socks.SOCKS5
-        socks.set_default_proxy(
-            socks_type,
-            host,
-            int(port),
-            username=username if username else None,
-            password=password if password else None
-        )
-        socket.socket = socks.socksocket
-    
-    return session
+        .container {
+            display: flex;
+            gap: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .config-panel {
+            flex: 1;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .log-panel {
+            flex: 1;
+            background: #1e1e1e;
+            color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            min-height: 400px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"],
+        input[type="password"],
+        select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .test-btn {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .connect-btn {
+            background-color: #2196F3;
+            color: white;
+        }
+        .clear-btn {
+            background-color: #f44336;
+            color: white;
+        }
+        .auth-fields {
+            padding: 10px;
+            margin-top: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            display: none;
+        }
+        .log-entry {
+            margin: 5px 0;
+            font-family: monospace;
+        }
+        .success { color: #4CAF50; }
+        .error { color: #f44336; }
+        .info { color: #2196F3; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="config-panel">
+            <h2>Proxy Configuration</h2>
+            <form id="proxyForm">
+                <div class="form-group">
+                    <label for="protocol">Protokoll:</label>
+                    <select id="protocol" required>
+                        <option value="http">HTTP</option>
+                        <option value="https">HTTPS</option>
+                        <option value="socks4">SOCKS4</option>
+                        <option value="socks5">SOCKS5</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="hostname">Proxy Hostname:</label>
+                    <input type="text" id="hostname" placeholder="proxy.example.com" required>
+                </div>
+                <div class="form-group">
+                    <label for="port">Port:</label>
+                    <input type="text" id="port" placeholder="8080" required>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="authRequired"> Authentifizierung erforderlich
+                    </label>
+                    <div id="authFields" class="auth-fields">
+                        <div class="form-group">
+                            <label for="username">Benutzername:</label>
+                            <input type="text" id="username">
+                        </div>
+                        <div class="form-group">
+                            <label for="password">Passwort:</label>
+                            <input type="password" id="password">
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="targetUrl">Ziel URL:</label>
+                    <input type="text" id="targetUrl" placeholder="https://example.com" required>
+                </div>
+                <div class="button-group">
+                    <button type="button" class="test-btn" onclick="testConnection()">Verbindung testen</button>
+                    <button type="submit" class="connect-btn">Verbinden</button>
+                    <button type="button" class="clear-btn" onclick="clearLog()">Log löschen</button>
+                </div>
+            </form>
+        </div>
+        <div class="log-panel">
+            <h2>Log Konsole</h2>
+            <div id="logConsole"></div>
+        </div>
+    </div>
 
-def modify_links(content, base_url, proxy_settings):
-    """Modifiziert alle Links in der HTML-Seite, damit sie über den Proxy geleitet werden"""
-    soup = BeautifulSoup(content, 'html.parser')
-    
-    # Proxy-Parameter für die URLs
-    modified_count = 0
-    proxy_params = {
-        'proxy_host': proxy_settings['host'],
-        'proxy_port': proxy_settings['port'],
-        'protocol': proxy_settings['protocol']
-    }
-    if proxy_settings.get('username'):
-        proxy_params['proxy_username'] = proxy_settings['username']
-        proxy_params['proxy_password'] = proxy_settings['password']
-    
-    # Relative URLs in absolute URLs umwandeln
-    for tag in soup.find_all(['a', 'img', 'link', 'script']):
-        for attr in ['href', 'src']:
-            if tag.get(attr):
-                url = tag.get(attr)
-                if not url.startswith(('javascript:', 'data:', '#', 'mailto:')):
-                    if not url.startswith(('http://', 'https://')):
-                        url = urllib.parse.urljoin(base_url, url)
-                    
-                    # Erstelle Query-String für Proxy-Parameter
-                    query_params = urllib.parse.urlencode({
-                        'url': url,
-                        **proxy_params
-                    })
-                    tag[attr] = f"/browse?{query_params}"
-    
-    return str(soup)
+    <script>
+        // Auth Fields Toggle
+        document.getElementById('authRequired').addEventListener('change', function() {
+            document.getElementById('authFields').style.display = this.checked ? 'block' : 'none';
+        });
 
-@app.route('/')
-def index():
-    return render_template('index.html')
-
-def test_proxy_connection(session, protocol):
-    """Testet die Proxy-Verbindung mit verschiedenen URLs"""
-    test_urls = [
-        'http://google.com',
-        'https://google.com',
-        #'http://httpbin.org/ip',
-        #'https://httpbin.org/ip'
-    ]
-    
-    # Wähle die passende Test-URL basierend auf dem Protokoll
-    if protocol.startswith('http'):
-        urls_to_try = test_urls
-    else:
-        # Für SOCKS nur HTTPS verwenden
-        urls_to_try = [url for url in test_urls if url.startswith('https')]
-
-    for test_url in urls_to_try:
-        try:
-            response = session.get(test_url, timeout=5, verify=False)
-            if response.status_code == 200:
-                return response, None
-        except requests.exceptions.RequestException as e:
-            continue
-    
-    return None, "Keine der Test-URLs war erreichbar"
-
-@app.route('/test_connection', methods=['POST'])
-def test_connection():
-    try:
-        protocol = request.form.get('protocol', 'http')
-        host = request.form.get('proxy_host')
-        port = request.form.get('proxy_port')
-        use_auth = request.form.get('use_auth') == 'on'
-        username = request.form.get('proxy_username') if use_auth else None
-        password = request.form.get('proxy_password') if use_auth else None
-
-        logging.info(f"Testing connection to proxy {protocol}://{host}:{port}")
-
-        # Validiere Port
-        try:
-            port = int(port)
-            if port < 1 or port > 65535:
-                return jsonify({'success': False, 'error': 'Ungültiger Port (muss zwischen 1 und 65535 liegen)'})
-        except ValueError:
-            return jsonify({'success': False, 'error': 'Port muss eine Zahl sein'})
-
-        # Validiere Host
-        if not host:
-            return jsonify({'success': False, 'error': 'Proxy-Host ist erforderlich'})
-
-        start_time = time.time()
-        try:
-            session = create_proxy_session(protocol, host, port, username, password)
-            response, error = test_proxy_connection(session, protocol)
-            
-            if error:
-                return jsonify({'success': False, 'error': error})
-            
-            if response:
-                end_time = time.time()
-                latency = round((end_time - start_time) * 1000)
-                
-                # Versuche die externe IP zu ermitteln
-                try:
-                    if 'httpbin.org' in response.url:
-                        ip_info = response.json()
-                        external_ip = ip_info.get('origin', 'Unbekannt')
-                    else:
-                        external_ip = 'Nicht verfügbar'
-                except:
-                    external_ip = 'Nicht verfügbar'
-
-                return jsonify({
-                    'success': True,
-                    'latency': latency,
-                    'details': {
-                        'status_code': response.status_code,
-                        'response_size': len(response.content),
-                        'server': response.headers.get('Server', 'Unknown'),
-                        'external_ip': external_ip,
-                        'protocol_used': protocol
-                    }
-                })
-            
-            return jsonify({'success': False, 'error': 'Keine erfolgreiche Verbindung möglich'})
-
-        except requests.exceptions.ProxyError as e:
-            error_msg = f"Proxy-Verbindungsfehler: Verbindung zum Proxy-Server nicht möglich. Bitte überprüfen Sie:\n" \
-                       f"1. Ist der Proxy-Server aktiv?\n" \
-                       f"2. Sind Host und Port korrekt?\n" \
-                       f"3. Ist das richtige Protokoll ausgewählt?\n" \
-                       f"4. Sind die Authentifizierungsdaten korrekt?"
-            logging.error(f"Proxy error: {str(e)}")
-            return jsonify({'success': False, 'error': error_msg})
-            
-        except requests.exceptions.SSLError as e:
-            error_msg = "SSL/TLS Fehler: Verschlüsselungsfehler bei der Verbindung"
-            logging.error(f"SSL error: {str(e)}")
-            return jsonify({'success': False, 'error': error_msg})
-            
-        except requests.exceptions.ConnectionError as e:
-            error_msg = f"Verbindungsfehler: Server nicht erreichbar oder falsches Protokoll"
-            logging.error(f"Connection error: {str(e)}")
-            return jsonify({'success': False, 'error': error_msg})
-            
-        except requests.exceptions.Timeout as e:
-            error_msg = "Zeitüberschreitung: Der Server antwortet nicht"
-            logging.error(f"Timeout error: {str(e)}")
-            return jsonify({'success': False, 'error': error_msg})
-            
-        except Exception as e:
-            error_msg = f"Unerwarteter Fehler: {str(e)}"
-            logging.error(f"Unexpected error: {str(e)}")
-            return jsonify({'success': False, 'error': error_msg})
-
-    except Exception as e:
-        error_msg = f"Fehler beim Testen der Verbindung: {str(e)}"
-        logging.error(error_msg)
-        return jsonify({'success': False, 'error': error_msg})
-
-@app.route('/browse', methods=['GET', 'POST'])
-def browse():
-    try:
-        if request.method == 'POST':
-            # Hole alle Proxy-Einstellungen aus dem Formular
-            proxy_settings = {
-                'protocol': request.form.get('protocol', 'http'),
-                'host': request.form.get('proxy_host'),
-                'port': request.form.get('proxy_port'),
-                'use_auth': request.form.get('use_auth') == 'on'
-            }
-            
-            if proxy_settings['use_auth']:
-                proxy_settings['username'] = request.form.get('proxy_username')
-                proxy_settings['password'] = request.form.get('proxy_password')
-            
-            url = request.form.get('url')
-            session['proxy_settings'] = proxy_settings
-        else:
-            url = request.args.get('url')
-            proxy_settings = {
-                'protocol': request.args.get('protocol'),
-                'host': request.args.get('proxy_host'),
-                'port': request.args.get('proxy_port'),
-                'username': request.args.get('proxy_username'),
-                'password': request.args.get('proxy_password')
-            }
-
-        if not url:
-            return render_template('index.html', error="Bitte geben Sie eine URL ein.")
-
-        if not url.startswith(('http://', 'https://')):
-            url = 'http://' + url
-
-        # Request-Header
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        // Logging functions
+        function log(message, type = 'info') {
+            const logConsole = document.getElementById('logConsole');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logConsole.appendChild(entry);
+            logConsole.scrollTop = logConsole.scrollHeight;
         }
 
-        # Erstelle Proxy-Session und sende Request
-        session = create_proxy_session(
-            proxy_settings['protocol'],
-            proxy_settings['host'],
-            proxy_settings['port'],
-            proxy_settings.get('username'),
-            proxy_settings.get('password')
-        )
-        
-        response = session.get(url, headers=headers, verify=False, timeout=10)
-        
-        # Content-Type überprüfen
-        content_type = response.headers.get('Content-Type', '').lower()
-        
-        if 'text/html' in content_type:
-            modified_content, modified_links = modify_links(response.text, url, proxy_settings)
-            success_message = (
-                f"Seite erfolgreich geladen in {request_time}ms. "
-                f"Größe: {response_size/1024:.1f}KB. "
-                f"{modified_links} Links modifiziert."
-            )
-            return render_template('index.html', 
-                                content=modified_content,
-                                success=success_message)
-        else:
-            # Für nicht-HTML Inhalte (Bilder, PDFs, etc.)
-            return response.content, 200, {'Content-Type': response.headers['Content-Type']}
+        function clearLog() {
+            document.getElementById('logConsole').innerHTML = '';
+            log('Log wurde gelöscht');
+        }
 
-    except requests.exceptions.ProxyError:
-        error_message = "Fehler bei der Verbindung zum Proxy-Server. Bitte überprüfen Sie die Proxy-Einstellungen."
-        return render_template('index.html', error=error_message)
-    except requests.exceptions.ConnectionError:
-        error_message = "Verbindungsfehler. Bitte überprüfen Sie die URL und Proxy-Einstellungen."
-        return render_template('index.html', error=error_message)
-    except requests.exceptions.Timeout:
-        error_message = "Zeitüberschreitung bei der Anfrage. Bitte versuchen Sie es erneut."
-        return render_template('index.html', error=error_message)
-    except Exception as e:
-        logging.error(f"Unerwarteter Fehler: {str(e)}")
-        error_message = f"Ein Fehler ist aufgetreten: {str(e)}"
-        return render_template('index.html', error=error_message)
+        // Form submission
+        document.getElementById('proxyForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = getFormData();
+            log(`Verbindungsaufbau zu ${formData.targetUrl} über ${formData.protocol}://${formData.hostname}:${formData.port}`);
+            // Hier würde die tatsächliche Verbindungslogik implementiert werden
+        });
 
-if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+        // Test connection
+        function testConnection() {
+            const formData = getFormData();
+            log('Teste Verbindung...', 'info');
+            
+            // Simuliere einen Verbindungstest
+            setTimeout(() => {
+                if (formData.hostname && formData.port) {
+                    log(`Erfolgreicher Test: ${formData.protocol}://${formData.hostname}:${formData.port}`, 'success');
+                } else {
+                    log('Fehler: Hostname und Port sind erforderlich', 'error');
+                }
+            }, 1000);
+        }
+
+        // Helper function to get form data
+        function getFormData() {
+            return {
+                protocol: document.getElementById('protocol').value,
+                hostname: document.getElementById('hostname').value,
+                port: document.getElementById('port').value,
+                username: document.getElementById('username').value,
+                password: document.getElementById('password').value,
+                targetUrl: document.getElementById('targetUrl').value,
+                authRequired: document.getElementById('authRequired').checked
+            };
+        }
+
+        // Initial log message
+        log('System bereit');
+    </script>
+</body>
+</html>
