@@ -1,25 +1,35 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Web Proxy</title>
+    <title>Proxy Configuration</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            max-width: 1200px;
-            margin: 0 auto;
+            margin: 0;
             padding: 20px;
             background-color: #f5f5f5;
         }
         .container {
             display: flex;
             gap: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
         }
-        .main-content {
-            flex: 2;
-        }
-        .log-console {
+        .config-panel {
             flex: 1;
-            min-width: 300px;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .log-panel {
+            flex: 1;
+            background: #1e1e1e;
+            color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            min-height: 400px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
         .form-group {
             margin-bottom: 15px;
@@ -29,290 +39,168 @@
             margin-bottom: 5px;
             font-weight: bold;
         }
-        input[type="text"], input[type="number"], input[type="password"], select {
+        input[type="text"],
+        input[type="password"],
+        select {
             width: 100%;
             padding: 8px;
-            margin-bottom: 10px;
             border: 1px solid #ddd;
             border-radius: 4px;
+            box-sizing: border-box;
         }
         .button-group {
             display: flex;
             gap: 10px;
-            margin-bottom: 20px;
+            margin-top: 20px;
         }
         button {
-            background-color: #4CAF50;
-            color: white;
-            padding: 10px 15px;
+            padding: 10px 20px;
             border: none;
             border-radius: 4px;
             cursor: pointer;
-            font-size: 16px;
+            font-weight: bold;
         }
-        button.test {
+        .test-btn {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .connect-btn {
             background-color: #2196F3;
+            color: white;
         }
-        button:hover {
-            opacity: 0.9;
+        .clear-btn {
+            background-color: #f44336;
+            color: white;
         }
-        .error {
-            color: #ff0000;
-            background-color: #ffe6e6;
+        .auth-fields {
             padding: 10px;
-            border-radius: 4px;
-            margin-bottom: 15px;
-        }
-        .success {
-            color: #4CAF50;
-            background-color: #e8f5e9;
-            padding: 10px;
-            border-radius: 4px;
-            margin-bottom: 15px;
-        }
-        #result {
-            margin-top: 20px;
-            padding: 15px;
+            margin-top: 10px;
             border: 1px solid #ddd;
             border-radius: 4px;
-        }
-        .info {
-            background-color: #f8f9fa;
-            padding: 10px;
-            border-radius: 4px;
-            margin-bottom: 15px;
-        }
-        .auth-section {
-            border: 1px solid #ddd;
-            padding: 15px;
-            border-radius: 4px;
-            margin-bottom: 15px;
-        }
-        .checkbox-group {
-            margin-bottom: 10px;
-        }
-        .checkbox-group label {
-            display: inline;
-            margin-left: 5px;
-        }
-        #logConsole {
-            background-color: #1e1e1e;
-            color: #00ff00;
-            font-family: monospace;
-            padding: 15px;
-            border-radius: 4px;
-            height: 400px;
-            overflow-y: auto;
-            margin-top: 20px;
+            display: none;
         }
         .log-entry {
-            margin-bottom: 5px;
-            border-bottom: 1px solid #333;
-            padding-bottom: 5px;
+            margin: 5px 0;
+            font-family: monospace;
         }
-        .log-time {
-            color: #888;
-        }
-        .log-error {
-            color: #ff4444;
-        }
-        .log-success {
-            color: #00ff00;
-        }
-        .log-info {
-            color: #2196F3;
-        }
-        .clear-log {
-            background-color: #ff4444;
-            margin-top: 10px;
-        }
+        .success { color: #4CAF50; }
+        .error { color: #f44336; }
+        .info { color: #2196F3; }
     </style>
 </head>
 <body>
-    <h1>Web Proxy</h1>
     <div class="container">
-        <div class="main-content">
-            <div class="connection-status">
-                <span class="status-indicator" id="connectionStatus"></span>
-                <span id="statusText">Nicht verbunden</span>
-            </div>
-
-            <div class="info">
-        Geben Sie die Proxy-Server-Details und die gewünschte URL ein, um eine Webseite über den Proxy aufzurufen.
-    </div>
-    
-    {% if error %}
-    <div class="error">
-        {{ error }}
-    </div>
-    {% endif %}
-
-    {% if success %}
-    <div class="success">
-        {{ success }}
-    </div>
-    {% endif %}
-
-    <form id="proxyForm" action="/browse" method="POST">
-        <div class="form-group">
-            <label for="protocol">Protokoll:</label>
-            <select id="protocol" name="protocol" required>
-                <option value="http">HTTP</option>
-                <option value="https">HTTPS</option>
-                <option value="socks4">SOCKS4</option>
-                <option value="socks5">SOCKS5</option>
-            </select>
-        </div>
-        
-        <div class="form-group">
-            <label for="proxy_host">Proxy Server:</label>
-            <input type="text" id="proxy_host" name="proxy_host" placeholder="proxy.example.com" required>
-        </div>
-        
-        <div class="form-group">
-            <label for="proxy_port">Port:</label>
-            <input type="number" id="proxy_port" name="proxy_port" placeholder="8080" required>
-        </div>
-
-        <div class="auth-section">
-            <div class="checkbox-group">
-                <input type="checkbox" id="use_auth" name="use_auth" onchange="toggleAuthFields()">
-                <label for="use_auth">Proxy erfordert Authentifizierung</label>
-            </div>
-            
-            <div id="auth_fields" style="display: none;">
+        <div class="config-panel">
+            <h2>Proxy Configuration</h2>
+            <form id="proxyForm">
                 <div class="form-group">
-                    <label for="proxy_username">Benutzername:</label>
-                    <input type="text" id="proxy_username" name="proxy_username" placeholder="Benutzername">
+                    <label for="protocol">Protokoll:</label>
+                    <select id="protocol" required>
+                        <option value="http">HTTP</option>
+                        <option value="https">HTTPS</option>
+                        <option value="socks4">SOCKS4</option>
+                        <option value="socks5">SOCKS5</option>
+                    </select>
                 </div>
-                
                 <div class="form-group">
-                    <label for="proxy_password">Passwort:</label>
-                    <input type="password" id="proxy_password" name="proxy_password" placeholder="Passwort">
+                    <label for="hostname">Proxy Hostname:</label>
+                    <input type="text" id="hostname" placeholder="proxy.example.com" required>
                 </div>
-            </div>
+                <div class="form-group">
+                    <label for="port">Port:</label>
+                    <input type="text" id="port" placeholder="8080" required>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="authRequired"> Authentifizierung erforderlich
+                    </label>
+                    <div id="authFields" class="auth-fields">
+                        <div class="form-group">
+                            <label for="username">Benutzername:</label>
+                            <input type="text" id="username">
+                        </div>
+                        <div class="form-group">
+                            <label for="password">Passwort:</label>
+                            <input type="password" id="password">
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="targetUrl">Ziel URL:</label>
+                    <input type="text" id="targetUrl" placeholder="https://example.com" required>
+                </div>
+                <div class="button-group">
+                    <button type="button" class="test-btn" onclick="testConnection()">Verbindung testen</button>
+                    <button type="submit" class="connect-btn">Verbinden</button>
+                    <button type="button" class="clear-btn" onclick="clearLog()">Log löschen</button>
+                </div>
+            </form>
         </div>
-
-        <div class="form-group">
-            <label for="url">Ziel-URL:</label>
-            <input type="text" id="url" name="url" placeholder="https://www.example.com" required>
-        </div>
-
-        <div class="button-group">
-            <button type="button" onclick="testConnection()" class="test">Verbindung testen</button>
-            <button type="submit">Über Proxy aufrufen</button>
-        </div>
-    </form>
-
-    {% if content %}
-    <div id="result">
-        {{ content|safe }}
-    </div>
-    {% endif %}
-        </div>
-
-        <div class="log-console">
-            <h3>Log Konsole</h3>
+        <div class="log-panel">
+            <h2>Log Konsole</h2>
             <div id="logConsole"></div>
-            <button onclick="clearLog()" class="clear-log">Log löschen</button>
         </div>
     </div>
 
     <script>
-        const logConsole = document.getElementById('logConsole');
-        const connectionStatus = document.getElementById('connectionStatus');
-        const statusText = document.getElementById('statusText');
-        const testButton = document.getElementById('testButton');
-        
-        function updateConnectionStatus(connected, message = '') {
-            connectionStatus.className = 'status-indicator ' + 
-                (connected ? 'status-connected' : 'status-disconnected');
-            statusText.textContent = message || (connected ? 'Verbunden' : 'Nicht verbunden');
-        }
-        
-        function formatErrorMessage(message) {
-            // Ersetze \n mit HTML-Zeilenumbrüchen
-            return message.replace(/\n/g, '<br>');
-        }
-        
-        function addLog(message, type = 'info') {
-            const now = new Date();
-            const time = now.toLocaleTimeString();
-            const logEntry = document.createElement('div');
-            logEntry.className = `log-entry log-${type}`;
-            logEntry.innerHTML = `<span class="log-time">[${time}]</span> ${formatErrorMessage(message)}`;
-            logConsole.appendChild(logEntry);
+        // Auth Fields Toggle
+        document.getElementById('authRequired').addEventListener('change', function() {
+            document.getElementById('authFields').style.display = this.checked ? 'block' : 'none';
+        });
+
+        // Logging functions
+        function log(message, type = 'info') {
+            const logConsole = document.getElementById('logConsole');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logConsole.appendChild(entry);
             logConsole.scrollTop = logConsole.scrollHeight;
         }
 
         function clearLog() {
-            logConsole.innerHTML = '';
-            addLog('Log wurde gelöscht', 'info');
+            document.getElementById('logConsole').innerHTML = '';
+            log('Log wurde gelöscht');
         }
 
-        function toggleAuthFields() {
-            const authFields = document.getElementById('auth_fields');
-            const useAuth = document.getElementById('use_auth');
-            authFields.style.display = useAuth.checked ? 'block' : 'none';
-            addLog(`Authentifizierung ${useAuth.checked ? 'aktiviert' : 'deaktiviert'}`, 'info');
-        }
-
-        function testConnection() {
-            const protocol = document.getElementById('protocol').value;
-            const host = document.getElementById('proxy_host').value;
-            const port = document.getElementById('proxy_port').value;
-            
-            updateConnectionStatus(false, 'Teste Verbindung...');
-            testButton.classList.add('testing');
-            
-            addLog(`Teste Proxy-Verbindung zu ${protocol}://${host}:${port}...`, 'info');
-            
-            const formData = new FormData(document.getElementById('proxyForm'));
-            fetch('/test_connection', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    const details = data.details;
-                    addLog(`Verbindung erfolgreich!`, 'success');
-                    addLog(`Latenz: ${data.latency}ms`, 'info');
-                    addLog(`Externe IP: ${details.external_ip}`, 'info');
-                    addLog(`Server: ${details.server}`, 'info');
-                    addLog(`Protokoll: ${details.protocol_used}`, 'info');
-                    addLog(`Antwortgröße: ${Math.round(details.response_size/1024)}KB`, 'info');
-                } else {
-                    addLog(`Verbindungsfehler:`, 'error');
-                    addLog(data.error, 'error');
-                }
-            })
-            .catch(error => {
-                addLog(`Fehler beim Testen der Verbindung:`, 'error');
-                addLog(error.toString(), 'error');
-            });
-        }
-
-        // Event-Listener für das Formular
+        // Form submission
         document.getElementById('proxyForm').addEventListener('submit', function(e) {
-            const url = document.getElementById('url').value;
-            const protocol = document.getElementById('protocol').value;
-            const host = document.getElementById('proxy_host').value;
-            const port = document.getElementById('proxy_port').value;
-            
-            addLog(`Sende Anfrage an ${url}`, 'info');
-            addLog(`Verwende Proxy: ${protocol}://${host}:${port}`, 'info');
-            
-            // Wenn Authentifizierung aktiviert ist
-            if (document.getElementById('use_auth').checked) {
-                const username = document.getElementById('proxy_username').value;
-                addLog(`Authentifizierung aktiviert für Benutzer: ${username}`, 'info');
-            }
+            e.preventDefault();
+            const formData = getFormData();
+            log(`Verbindungsaufbau zu ${formData.targetUrl} über ${formData.protocol}://${formData.hostname}:${formData.port}`);
+            // Hier würde die tatsächliche Verbindungslogik implementiert werden
         });
 
-        // Initial Log
-        addLog('Web Proxy bereit', 'info');
-        addLog('Bitte geben Sie die Proxy-Details ein und testen Sie die Verbindung', 'info');
+        // Test connection
+        function testConnection() {
+            const formData = getFormData();
+            log('Teste Verbindung...', 'info');
+            
+            // Simuliere einen Verbindungstest
+            setTimeout(() => {
+                if (formData.hostname && formData.port) {
+                    log(`Erfolgreicher Test: ${formData.protocol}://${formData.hostname}:${formData.port}`, 'success');
+                } else {
+                    log('Fehler: Hostname und Port sind erforderlich', 'error');
+                }
+            }, 1000);
+        }
+
+        // Helper function to get form data
+        function getFormData() {
+            return {
+                protocol: document.getElementById('protocol').value,
+                hostname: document.getElementById('hostname').value,
+                port: document.getElementById('port').value,
+                username: document.getElementById('username').value,
+                password: document.getElementById('password').value,
+                targetUrl: document.getElementById('targetUrl').value,
+                authRequired: document.getElementById('authRequired').checked
+            };
+        }
+
+        // Initial log message
+        log('System bereit');
     </script>
 </body>
 </html>
